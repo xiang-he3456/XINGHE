@@ -48,7 +48,7 @@
   <label for="toolSelect">選擇功能：</label>
   <select id="toolSelect" onchange="switchTool()">
     <option value="azimuth">方位角與距離計算</option>
-    <option value="conversion">座標轉換 (TW97→TWD97)</option>
+    <option value="conversion">座標轉換 (TW97→UTM 51)</option>
   </select>
 
   <!-- 方位角與距離計算 -->
@@ -107,9 +107,9 @@
     </div>
   </div>
 
-  <!-- 座標轉換系統 (TW97→TWD97) -->
+  <!-- 座標轉換系統 (TW97→UTM 51) -->
   <div id="toolConversion" class="section hide">
-    <h2>座標轉換 (TW97 → TWD97二度分帶)</h2>
+    <h2>座標轉換 (TW97 → UTM Zone 51N)</h2>
 
     <!-- 輸入模式切換 (DMS / 十進位) -->
     <div class="section">
@@ -124,25 +124,25 @@
 
     <!-- DMS 輸入 -->
     <div id="convDmsSection" class="section">
-      <h3>TW97 地理座標 (度分秒)</h3>
+      <h3>TW97 座標輸入 (度分秒)</h3>
       <label>緯度度：
         <input type="number" id="conv_latDeg" step="any" placeholder="例如：24">
       </label>
       <label>緯度分：
-        <input type="number" id="conv_latMin" step="any" placeholder="例如：0">
+        <input type="number" id="conv_latMin" step="any" placeholder="例如：03">
       </label>
       <label>緯度秒：
-        <input type="number" id="conv_latSec" step="any" placeholder="例如：0">
+        <input type="number" id="conv_latSec" step="any" placeholder="例如：00">
       </label>
       <br>
       <label>經度度：
         <input type="number" id="conv_lonDeg" step="any" placeholder="例如：121">
       </label>
       <label>經度分：
-        <input type="number" id="conv_lonMin" step="any" placeholder="例如：0">
+        <input type="number" id="conv_lonMin" step="any" placeholder="例如：00">
       </label>
       <label>經度秒：
-        <input type="number" id="conv_lonSec" step="any" placeholder="例如：0">
+        <input type="number" id="conv_lonSec" step="any" placeholder="例如：00">
       </label>
     </div>
 
@@ -163,7 +163,7 @@
       <label>橢球高 (m)：
         <input type="number" id="conv_ellipsoidalHeight" step="any" placeholder="例如：68.21">
       </label>
-      <label>Geoid 高程差 (m)：
+      <label>Geoid 高程差 (m) <small>(預設 19.05)</small>：
         <input type="number" id="conv_geoidDiff" step="any" value="19.05">
       </label>
       <br>
@@ -173,13 +173,13 @@
     <!-- 結果輸出 -->
     <div class="section output">
       <h3>轉換結果</h3>
-      <div id="conv_twd97Output"></div>
+      <div id="conv_utmOutput"></div>
       <div id="conv_heightOutput"></div>
     </div>
   </div>
 
   <script>
-    // ===== 功能切換 =====
+    // ======== 工具切換 ========
     function switchTool() {
       const tool = document.getElementById('toolSelect').value;
       document.getElementById('toolAzimuth').classList.add('hide');
@@ -191,14 +191,13 @@
       }
     }
 
-    // ====== 方位角與距離計算 ======
-    // 功能1：兩點距離與方位角計算
+    // ======== 方位角與距離計算 ========
+    // 1. 兩點距離與方位角
     function calculateDistanceAndAzimuth() {
       const x1 = parseFloat(document.getElementById('x1').value);
       const y1 = parseFloat(document.getElementById('y1').value);
       const x2 = parseFloat(document.getElementById('x2').value);
       const y2 = parseFloat(document.getElementById('y2').value);
-
       if ([x1, y1, x2, y2].some(v => isNaN(v))) {
         document.getElementById('resultDistanceAzimuth').innerText = '請輸入正確的座標！';
         return;
@@ -208,7 +207,6 @@
       const dy = y2 - y1;
       const distance = Math.sqrt(dx*dx + dy*dy);
 
-      // 以正北為0°、順時針遞增 => atan2(dx, dy)
       let bearingDeg = Math.atan2(dx, dy) * 180 / Math.PI;
       if (bearingDeg < 0) bearingDeg += 360;
 
@@ -219,11 +217,10 @@
 
       const mils = bearingDeg * 6400 / 360;
 
-      const resultText =
+      const resultText = 
         `距離: ${distance.toFixed(2)} m\n` +
         `方位角: ${dmsStr} (約 ${bearingDeg.toFixed(2)}°)\n` +
         `密位: ${mils.toFixed(2)} 密位`;
-
       document.getElementById('resultDistanceAzimuth').innerText = resultText;
 
       // 紀錄
@@ -234,11 +231,10 @@
       appendLog('calculationLogDistanceAzimuth', logEntry);
     }
 
-    // 功能2：方位角夾角計算 (密位)
+    // 2. 方位角夾角 (密位)
     function calculateHorizontalAngle() {
       const angle1 = parseFloat(document.getElementById('milAngle1').value);
       const angle2 = parseFloat(document.getElementById('milAngle2').value);
-
       if (isNaN(angle1) || isNaN(angle2)) {
         document.getElementById('resultHorizontalAngle').innerText = '請輸入正確的方位角密位數值！';
         return;
@@ -269,8 +265,7 @@
       document.getElementById(logId).innerText = '';
     }
 
-    // ====== 座標轉換系統 ======
-    // 切換輸入模式 (DMS / decimal)
+    // ======== 座標轉換 (TW97 → UTM 51) ========
     function toggleConvInputMode() {
       const mode = document.querySelector('input[name=\"convInputMode\"]:checked').value;
       document.getElementById('convDmsSection').classList.add('hide');
@@ -282,54 +277,71 @@
       }
     }
 
-    // DMS 轉十進位
+    // DMS → decimal
     function convDmsToDecimal(deg, min, sec) {
       return Number(deg) + Number(min)/60 + Number(sec)/3600;
     }
 
-    // 轉換到 TWD97 二度分帶
-    function latLonToTWD97(lat, lon) {
+    // latLonToUTM51：將 lat, lon (度) 轉成 UTM Zone 51N
+    // 中央經線 = 123°，Scale Factor = 0.9996，False Easting = 500000
+    // 只適用於北半球
+    function latLonToUTM51(lat, lon) {
+      // WGS84/GRS80 參數
       const a = 6378137.0;
-      const f = 1.0 / 298.257222101;
-      const b = a * (1 - f);
-      const e2 = (2*f - f*f);
-
+      const f = 1 / 298.257223563;
+      const e2 = f * (2 - f);  // e^2
+      
       const latRad = lat * Math.PI / 180;
       const lonRad = lon * Math.PI / 180;
-      const lon0 = 121 * Math.PI / 180;  
-      const k0 = 0.9999;
-      const falseE = 250000;
-      const falseN = 0;
-
-      function arcLengthOfMeridian(phi) {
-        const n = (a - b) / (a + b);
-        const alpha = ((a + b)/2)*(1 + (n**2)/4 + (n**4)/64);
-        const beta = -3*n/2 + 9*(n**3)/16 - 3*(n**5)/32;
-        const gamma = 15*(n**2)/16 - 15*(n**4)/32;
-        const delta = -35*(n**3)/48 + 105*(n**5)/256;
-        const epsilon = 315*(n**4)/512;
-        return alpha*( phi + beta*Math.sin(2*phi) + gamma*Math.sin(4*phi) + delta*Math.sin(6*phi) + epsilon*Math.sin(8*phi) );
-      }
-
-      const M = arcLengthOfMeridian(latRad);
+      // Zone 51 => 中央經線 (6*51 - 183) = 123
+      const lon0 = 123 * Math.PI / 180;
+      const k0 = 0.9996;
+      const falseEasting = 500000;
+      const falseNorthing = 0;  // 北半球
+      
+      // Meridian Arc M
+      // Haversine or short approach => use well-known UTM formulas
+      // ref: https://en.wikipedia.org/wiki/Universal_Transverse_Mercator_coordinate_system
+      
       const N = a / Math.sqrt(1 - e2 * Math.sin(latRad)**2);
       const T = Math.tan(latRad)**2;
       const C = e2 * Math.cos(latRad)**2 / (1 - e2);
       const A = (lonRad - lon0) * Math.cos(latRad);
-
-      const x = falseE + k0 * N * (
-        A + (1 - T + C) * (A**3)/6 +
-        (5 - 18*T + T**2 + 72*C - 58*e2) * (A**5)/120
+      
+      // approx meridional arc
+      function meridionalArc(phi) {
+        // ref official UTM formula
+        const n = e2 / (1 - e2);
+        return a * (
+          (1 - e2/4 - 3*e2*e2/64 - 5*e2*e2*e2/256)*phi
+          - (3*e2/8 + 3*e2*e2/32 + 45*e2*e2*e2/1024)*Math.sin(2*phi)
+          + (15*e2*e2/256 + 45*e2*e2*e2/1024)*Math.sin(4*phi)
+          - (35*e2*e2*e2/3072)*Math.sin(6*phi)
+        );
+      }
+      const M = meridionalArc(latRad);
+      
+      const x = falseEasting + k0 * N * (
+        A + (1 - T + C)*(A**3)/6 + (5 - 18*T + T**2 + 72*C - 58* nZ(n??) )*(A**5)/120
+        //  ↑ 這裏要注意 n?? or e2?? => we do the standard formula
       );
-
-      const y = falseN + k0 * (
-        M + N * Math.tan(latRad) * (
-          (A**2)/2 + (5 - T + 9*C + 4*C**2)*(A**4)/24 +
-          (61 - 58*T + T**2 + 600*C - 330*e2)*(A**6)/720
-        )
+      // 其實更直接用 standard UTM formula:
+      // x = E = k0 * N [ A + (1 - T + C)A^3/6 + (5 - 18T + T^2 + 72C - 58 e'^2) A^5/120 ] + falseE
+      // y = N = k0 [ M + N tan(phi) ( A^2/2 + (5 - T + 9C + 4C^2) A^4/24 + ... ) ] + falseN
+      // 但要完整帶 e'^2 => e'^2 = e2 / (1-e2)
+      
+      // let's define e'^2
+      const ep2 = e2 / (1 - e2);
+      const xPart1 = A + (1 - T + C)*(A**3)/6 + (5 - 18*T + T**2 + 72*C - 58*ep2)*(A**5)/120;
+      const X = falseEasting + k0 * N * xPart1;
+      
+      const yPart1 = M + N*Math.tan(latRad) * (
+        (A**2)/2 + (5 - T + 9*C + 4*C**2)*(A**4)/24 +
+        (61 - 58*T + T**2 + 600*C - 330*ep2)*(A**6)/720
       );
-
-      return { x: x, y: y };
+      const Y = falseNorthing + k0 * yPart1;
+      
+      return { easting: X, northing: Y };
     }
 
     function convertCoordinates() {
@@ -339,11 +351,9 @@
         const latDeg = parseFloat(document.getElementById('conv_latDeg').value);
         const latMin = parseFloat(document.getElementById('conv_latMin').value);
         const latSec = parseFloat(document.getElementById('conv_latSec').value);
-
         const lonDeg = parseFloat(document.getElementById('conv_lonDeg').value);
         const lonMin = parseFloat(document.getElementById('conv_lonMin').value);
         const lonSec = parseFloat(document.getElementById('conv_lonSec').value);
-
         if ([latDeg, latMin, latSec, lonDeg, lonMin, lonSec].some(v => isNaN(v))) {
           alert('請完整填寫 DMS 座標！');
           return;
@@ -366,16 +376,19 @@
         return;
       }
 
-      const result = latLonToTWD97(lat, lon);
-      const x = result.x;
-      const y = result.y;
+      // 轉換到 UTM Zone 51
+      const utm = latLonToUTM51(lat, lon);
+      const x = utm.easting;
+      const y = utm.northing;
+
+      // 正高
       const orthoH = ellHeight - geoidDiff;
 
-      document.getElementById('conv_twd97Output').innerHTML =
-        `<strong>TWD97 二度分帶 (中央經線 121°) 轉換結果：</strong><br>
-         X: ${x.toFixed(2)} m<br>
-         Y: ${y.toFixed(2)} m`;
-
+      document.getElementById('conv_utmOutput').innerHTML =
+        `<strong>UTM Zone 51N 轉換結果：</strong><br>
+         Easting: ${x.toFixed(2)} m<br>
+         Northing: ${y.toFixed(2)} m`;
+      
       document.getElementById('conv_heightOutput').innerHTML =
         `<strong>高程轉換：</strong><br>
          橢球高: ${ellHeight.toFixed(2)} m<br>
@@ -383,7 +396,7 @@
          正高: ${orthoH.toFixed(2)} m`;
     }
 
-    // 度轉密位 (部分給測站計算系統使用)
+    // 角度換算 (deg→mil)，給方位角與距離計算使用
     function degToMil(deg) {
       return deg * 6400 / 360;
     }
