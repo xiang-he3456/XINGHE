@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <title>綜合座標工具</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+    }
+    /* 區塊外觀 */
+    .section {
+      border: 1px solid #ccc;
+      padding: 15px;
+      margin-bottom: 20px;
+    }
+    /* 預設隱藏所有 section，由功能選單來切換顯示 */
+    .hide {
+      display: none;
+    }
+    /* 文字方塊與按鈕 */
+    input, button, select {
+      padding: 8px;
+      margin: 5px 0;
+      font-size: 1em;
+    }
+    /* 結果、紀錄外觀 */
+    .result, .log, .output {
+      white-space: pre-wrap;
+      background: #f9f9f9;
+      padding: 8px;
+      border: 1px dashed #ccc;
+      margin-top: 10px;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+    .log-title {
+      font-weight: bold;
+      margin-top: 10px;
+    }
+  </style>
+</head>
+
+<body>
+  <h1>綜合座標工具</h1>
+
+  <!-- 功能選單 -->
+  <label for="toolSelect">選擇功能：</label>
+  <select id="toolSelect" onchange="switchTool()">
+    <option value="azimuth">方位角與距離計算</option>
+    <option value="conversion">座標轉換 (TW97→TWD97)</option>
+  </select>
+
+  <!-- 方位角與距離計算 -->
+  <div id="toolAzimuth" class="section">
+    <h2>方位角與距離計算 (含紀錄)</h2>
+
+    <!-- 1. 兩點距離與方位角計算 -->
+    <div class="section">
+      <h3>兩點距離與方位角計算</h3>
+      <p>請輸入兩點座標 (UTM 或平面座標)：</p>
+      
+      <label>X1：
+        <input type="number" id="x1" placeholder="例如：254127.65" step="any">
+      </label>
+      <label>Y1：
+        <input type="number" id="y1" placeholder="例如：2689658.27" step="any">
+      </label>
+      <br>
+      <label>X2：
+        <input type="number" id="x2" placeholder="例如：255038.57" step="any">
+      </label>
+      <label>Y2：
+        <input type="number" id="y2" placeholder="例如：2689873.25" step="any">
+      </label>
+      <br>
+      <button onclick="calculateDistanceAndAzimuth()">計算距離與方位角</button>
+
+      <h4>計算結果</h4>
+      <div id="resultDistanceAzimuth" class="result"></div>
+
+      <h4 class="log-title">計算紀錄</h4>
+      <div id="calculationLogDistanceAzimuth" class="log"></div>
+      <button onclick="clearLog('calculationLogDistanceAzimuth')">清除紀錄</button>
+    </div>
+
+    <!-- 2. 方位角夾角計算 (密位) -->
+    <div class="section">
+      <h3>方位角夾角計算 (單位：密位)</h3>
+      <p>請輸入兩個方位角 (6400 密位 = 360°)：</p>
+      
+      <label>方位角 1 (密位)：
+        <input type="number" id="milAngle1" placeholder="例如：800" step="any">
+      </label>
+      <label>方位角 2 (密位)：
+        <input type="number" id="milAngle2" placeholder="例如：1000" step="any">
+      </label>
+      <br>
+      <button onclick="calculateHorizontalAngle()">計算水平夾角</button>
+
+      <h4>計算結果</h4>
+      <div id="resultHorizontalAngle" class="result"></div>
+
+      <h4 class="log-title">計算紀錄</h4>
+      <div id="calculationLogHorizontalAngle" class="log"></div>
+      <button onclick="clearLog('calculationLogHorizontalAngle')">清除紀錄</button>
+    </div>
+  </div>
+
+  <!-- 座標轉換系統 (TW97→TWD97) -->
+  <div id="toolConversion" class="section hide">
+    <h2>座標轉換 (TW97 → TWD97二度分帶)</h2>
+
+    <!-- 輸入模式切換 (DMS / 十進位) -->
+    <div class="section">
+      <h3>輸入模式選擇</h3>
+      <label>
+        <input type="radio" name="convInputMode" value="dms" checked onclick="toggleConvInputMode()"> 使用度、分、秒 (DMS)
+      </label>
+      <label>
+        <input type="radio" name="convInputMode" value="decimal" onclick="toggleConvInputMode()"> 使用十進位 (度)
+      </label>
+    </div>
+
+    <!-- DMS 輸入 -->
+    <div id="convDmsSection" class="section">
+      <h3>TW97 地理座標 (度分秒)</h3>
+      <label>緯度度：
+        <input type="number" id="conv_latDeg" step="any" placeholder="例如：24">
+      </label>
+      <label>緯度分：
+        <input type="number" id="conv_latMin" step="any" placeholder="例如：0">
+      </label>
+      <label>緯度秒：
+        <input type="number" id="conv_latSec" step="any" placeholder="例如：0">
+      </label>
+      <br>
+      <label>經度度：
+        <input type="number" id="conv_lonDeg" step="any" placeholder="例如：121">
+      </label>
+      <label>經度分：
+        <input type="number" id="conv_lonMin" step="any" placeholder="例如：0">
+      </label>
+      <label>經度秒：
+        <input type="number" id="conv_lonSec" step="any" placeholder="例如：0">
+      </label>
+    </div>
+
+    <!-- 十進位輸入 -->
+    <div id="convDecimalSection" class="section hide">
+      <h3>TW97 地理座標 (十進位)</h3>
+      <label>緯度 (°)：
+        <input type="number" id="conv_latDec" step="any" placeholder="例如：24.05">
+      </label>
+      <label>經度 (°)：
+        <input type="number" id="conv_lonDec" step="any" placeholder="例如：121.00">
+      </label>
+    </div>
+
+    <!-- 高程輸入 -->
+    <div class="section">
+      <h3>高程輸入</h3>
+      <label>橢球高 (m)：
+        <input type="number" id="conv_ellipsoidalHeight" step="any" placeholder="例如：68.21">
+      </label>
+      <label>Geoid 高程差 (m)：
+        <input type="number" id="conv_geoidDiff" step="any" value="19.05">
+      </label>
+      <br>
+      <button onclick="convertCoordinates()">開始轉換</button>
+    </div>
+
+    <!-- 結果輸出 -->
+    <div class="section output">
+      <h3>轉換結果</h3>
+      <div id="conv_twd97Output"></div>
+      <div id="conv_heightOutput"></div>
+    </div>
+  </div>
+
+  <script>
+    // ===== 功能切換 =====
+    function switchTool() {
+      const tool = document.getElementById('toolSelect').value;
+      document.getElementById('toolAzimuth').classList.add('hide');
+      document.getElementById('toolConversion').classList.add('hide');
+      if (tool === 'azimuth') {
+        document.getElementById('toolAzimuth').classList.remove('hide');
+      } else {
+        document.getElementById('toolConversion').classList.remove('hide');
+      }
+    }
+
+    // ====== 方位角與距離計算 ======
+    // 功能1：兩點距離與方位角計算
+    function calculateDistanceAndAzimuth() {
+      const x1 = parseFloat(document.getElementById('x1').value);
+      const y1 = parseFloat(document.getElementById('y1').value);
+      const x2 = parseFloat(document.getElementById('x2').value);
+      const y2 = parseFloat(document.getElementById('y2').value);
+
+      if ([x1, y1, x2, y2].some(v => isNaN(v))) {
+        document.getElementById('resultDistanceAzimuth').innerText = '請輸入正確的座標！';
+        return;
+      }
+
+      const dx = x2 - x1;
+      const dy = y2 - y1;
+      const distance = Math.sqrt(dx*dx + dy*dy);
+
+      // 以正北為0°、順時針遞增 => atan2(dx, dy)
+      let bearingDeg = Math.atan2(dx, dy) * 180 / Math.PI;
+      if (bearingDeg < 0) bearingDeg += 360;
+
+      const degPart = Math.floor(bearingDeg);
+      const minPart = Math.floor((bearingDeg - degPart) * 60);
+      const secPart = (((bearingDeg - degPart) * 60) - minPart) * 60;
+      const dmsStr = `${degPart}° ${minPart}' ${secPart.toFixed(2)}''`;
+
+      const mils = bearingDeg * 6400 / 360;
+
+      const resultText =
+        `距離: ${distance.toFixed(2)} m\n` +
+        `方位角: ${dmsStr} (約 ${bearingDeg.toFixed(2)}°)\n` +
+        `密位: ${mils.toFixed(2)} 密位`;
+
+      document.getElementById('resultDistanceAzimuth').innerText = resultText;
+
+      // 紀錄
+      const now = new Date().toLocaleString();
+      const logEntry = `[${now}]\n` +
+                       `基點: (${x1}, ${y1}), 端點: (${x2}, ${y2})\n` +
+                       resultText + `\n--------------------\n`;
+      appendLog('calculationLogDistanceAzimuth', logEntry);
+    }
+
+    // 功能2：方位角夾角計算 (密位)
+    function calculateHorizontalAngle() {
+      const angle1 = parseFloat(document.getElementById('milAngle1').value);
+      const angle2 = parseFloat(document.getElementById('milAngle2').value);
+
+      if (isNaN(angle1) || isNaN(angle2)) {
+        document.getElementById('resultHorizontalAngle').innerText = '請輸入正確的方位角密位數值！';
+        return;
+      }
+
+      let diff = Math.abs(angle1 - angle2);
+      if (diff > 3200) diff = 6400 - diff;
+
+      const deg = diff * 360 / 6400;
+      const resultStr = `水平夾角： ${diff.toFixed(2)} 密位 (約 ${deg.toFixed(2)}°)`;
+      document.getElementById('resultHorizontalAngle').innerText = resultStr;
+
+      // 紀錄
+      const now = new Date().toLocaleString();
+      const logEntry = `[${now}]\n` +
+                       `方位角 1: ${angle1} 密位, 方位角 2: ${angle2} 密位\n` +
+                       resultStr + `\n--------------------\n`;
+      appendLog('calculationLogHorizontalAngle', logEntry);
+    }
+
+    // 紀錄函式
+    function appendLog(logId, logEntry) {
+      const logDiv = document.getElementById(logId);
+      logDiv.innerText += logEntry;
+    }
+    // 清除紀錄
+    function clearLog(logId) {
+      document.getElementById(logId).innerText = '';
+    }
+
+    // ====== 座標轉換系統 ======
+    // 切換輸入模式 (DMS / decimal)
+    function toggleConvInputMode() {
+      const mode = document.querySelector('input[name=\"convInputMode\"]:checked').value;
+      document.getElementById('convDmsSection').classList.add('hide');
+      document.getElementById('convDecimalSection').classList.add('hide');
+      if (mode === 'dms') {
+        document.getElementById('convDmsSection').classList.remove('hide');
+      } else {
+        document.getElementById('convDecimalSection').classList.remove('hide');
+      }
+    }
+
+    // DMS 轉十進位
+    function convDmsToDecimal(deg, min, sec) {
+      return Number(deg) + Number(min)/60 + Number(sec)/3600;
+    }
+
+    // 轉換到 TWD97 二度分帶
+    function latLonToTWD97(lat, lon) {
+      const a = 6378137.0;
+      const f = 1.0 / 298.257222101;
+      const b = a * (1 - f);
+      const e2 = (2*f - f*f);
+
+      const latRad = lat * Math.PI / 180;
+      const lonRad = lon * Math.PI / 180;
+      const lon0 = 121 * Math.PI / 180;  
+      const k0 = 0.9999;
+      const falseE = 250000;
+      const falseN = 0;
+
+      function arcLengthOfMeridian(phi) {
+        const n = (a - b) / (a + b);
+        const alpha = ((a + b)/2)*(1 + (n**2)/4 + (n**4)/64);
+        const beta = -3*n/2 + 9*(n**3)/16 - 3*(n**5)/32;
+        const gamma = 15*(n**2)/16 - 15*(n**4)/32;
+        const delta = -35*(n**3)/48 + 105*(n**5)/256;
+        const epsilon = 315*(n**4)/512;
+        return alpha*( phi + beta*Math.sin(2*phi) + gamma*Math.sin(4*phi) + delta*Math.sin(6*phi) + epsilon*Math.sin(8*phi) );
+      }
+
+      const M = arcLengthOfMeridian(latRad);
+      const N = a / Math.sqrt(1 - e2 * Math.sin(latRad)**2);
+      const T = Math.tan(latRad)**2;
+      const C = e2 * Math.cos(latRad)**2 / (1 - e2);
+      const A = (lonRad - lon0) * Math.cos(latRad);
+
+      const x = falseE + k0 * N * (
+        A + (1 - T + C) * (A**3)/6 +
+        (5 - 18*T + T**2 + 72*C - 58*e2) * (A**5)/120
+      );
+
+      const y = falseN + k0 * (
+        M + N * Math.tan(latRad) * (
+          (A**2)/2 + (5 - T + 9*C + 4*C**2)*(A**4)/24 +
+          (61 - 58*T + T**2 + 600*C - 330*e2)*(A**6)/720
+        )
+      );
+
+      return { x: x, y: y };
+    }
+
+    function convertCoordinates() {
+      const mode = document.querySelector('input[name=\"convInputMode\"]:checked').value;
+      let lat, lon;
+      if (mode === 'dms') {
+        const latDeg = parseFloat(document.getElementById('conv_latDeg').value);
+        const latMin = parseFloat(document.getElementById('conv_latMin').value);
+        const latSec = parseFloat(document.getElementById('conv_latSec').value);
+
+        const lonDeg = parseFloat(document.getElementById('conv_lonDeg').value);
+        const lonMin = parseFloat(document.getElementById('conv_lonMin').value);
+        const lonSec = parseFloat(document.getElementById('conv_lonSec').value);
+
+        if ([latDeg, latMin, latSec, lonDeg, lonMin, lonSec].some(v => isNaN(v))) {
+          alert('請完整填寫 DMS 座標！');
+          return;
+        }
+        lat = convDmsToDecimal(latDeg, latMin, latSec);
+        lon = convDmsToDecimal(lonDeg, lonMin, lonSec);
+      } else {
+        lat = parseFloat(document.getElementById('conv_latDec').value);
+        lon = parseFloat(document.getElementById('conv_lonDec').value);
+        if (isNaN(lat) || isNaN(lon)) {
+          alert('請輸入正確的十進位座標！');
+          return;
+        }
+      }
+
+      const ellHeight = parseFloat(document.getElementById('conv_ellipsoidalHeight').value);
+      const geoidDiff = parseFloat(document.getElementById('conv_geoidDiff').value);
+      if (isNaN(ellHeight) || isNaN(geoidDiff)) {
+        alert('請輸入正確的高程與 geoid 差！');
+        return;
+      }
+
+      const result = latLonToTWD97(lat, lon);
+      const x = result.x;
+      const y = result.y;
+      const orthoH = ellHeight - geoidDiff;
+
+      document.getElementById('conv_twd97Output').innerHTML =
+        `<strong>TWD97 二度分帶 (中央經線 121°) 轉換結果：</strong><br>
+         X: ${x.toFixed(2)} m<br>
+         Y: ${y.toFixed(2)} m`;
+
+      document.getElementById('conv_heightOutput').innerHTML =
+        `<strong>高程轉換：</strong><br>
+         橢球高: ${ellHeight.toFixed(2)} m<br>
+         Geoid 差: ${geoidDiff.toFixed(2)} m<br>
+         正高: ${orthoH.toFixed(2)} m`;
+    }
+
+    // 度轉密位 (部分給測站計算系統使用)
+    function degToMil(deg) {
+      return deg * 6400 / 360;
+    }
+  </script>
+</body>
+</html>
